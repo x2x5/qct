@@ -260,6 +260,7 @@
             // 检测是否为移动设备
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isAndroid = /Android/i.test(navigator.userAgent);
             
             // 创建切片
             for (let i = 0; i < nSlices; i++) {
@@ -304,7 +305,7 @@
             }
             
             // 处理移动设备上的下载按钮显示
-            if (isMobile) {
+            if (isMobile || isAndroid) {
                 downloadAllButton.classList.add('hidden');
                 
                 // 为移动设备添加提示信息
@@ -462,8 +463,10 @@
         document.addEventListener('DOMContentLoaded', function() {
             // 检测是否为移动设备
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            // 专门检测安卓设备
+            const isAndroid = /Android/i.test(navigator.userAgent);
             
-            if (isMobile) {
+            if (isMobile || isAndroid) {
                 // 在移动设备上，直接隐藏下载全部按钮
                 downloadAllButton.classList.add('hidden');
                 
