@@ -293,33 +293,61 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
             if (isIOS) {
-                // iOS处理方式
-                const image = new Image();
-                image.src = dataURL;
+                // iOS处理方式 - 使用模态窗口而非弹出窗口
                 
-                // 创建一个临时的canvas
-                const canvas = document.createElement('canvas');
-                canvas.width = image.width;
-                canvas.height = image.height;
+                // 创建模态窗口
+                const modal = document.createElement('div');
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                modal.style.zIndex = '1000';
+                modal.style.display = 'flex';
+                modal.style.flexDirection = 'column';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
                 
-                // 等待图像加载完成
-                image.onload = function() {
-                    // 在canvas上绘制图像
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(image, 0, 0);
-                    
-                    // 显示一个新窗口，让用户长按保存
-                    const newWindow = window.open();
-                    if (newWindow) {
-                        newWindow.document.write('<html><body style="margin:0;padding:0;text-align:center;background:#f5f5f5;">');
-                        newWindow.document.write('<div style="padding:20px;font-family:sans-serif;color:#333;font-size:16px;">长按图片并选择"保存图像"</div>');
-                        newWindow.document.write('<img src="' + dataURL + '" style="max-width:100%;height:auto;"/>');
-                        newWindow.document.write('</body></html>');
-                        newWindow.document.title = filename;
-                    } else {
-                        alert("请允许弹出窗口以保存图片");
-                    }
+                // 创建关闭按钮
+                const closeBtn = document.createElement('button');
+                closeBtn.textContent = '关闭';
+                closeBtn.style.position = 'absolute';
+                closeBtn.style.top = '20px';
+                closeBtn.style.right = '20px';
+                closeBtn.style.padding = '8px 16px';
+                closeBtn.style.backgroundColor = '#f44336';
+                closeBtn.style.color = 'white';
+                closeBtn.style.border = 'none';
+                closeBtn.style.borderRadius = '4px';
+                closeBtn.style.zIndex = '1001';
+                closeBtn.onclick = function() {
+                    document.body.removeChild(modal);
                 };
+                
+                // 创建提示文本
+                const hint = document.createElement('div');
+                hint.textContent = '长按图片并选择"保存图像"';
+                hint.style.color = 'white';
+                hint.style.padding = '15px';
+                hint.style.backgroundColor = '#333';
+                hint.style.borderRadius = '5px';
+                hint.style.marginBottom = '20px';
+                hint.style.fontSize = '16px';
+                
+                // 创建图片元素
+                const img = document.createElement('img');
+                img.src = dataURL;
+                img.style.maxWidth = '90%';
+                img.style.maxHeight = '70vh';
+                img.style.margin = '10px';
+                img.style.border = '1px solid #fff';
+                
+                // 组装模态窗口
+                modal.appendChild(closeBtn);
+                modal.appendChild(hint);
+                modal.appendChild(img);
+                document.body.appendChild(modal);
             } else {
                 // 安卓和桌面设备的处理方式
                 const link = document.createElement('a');
@@ -340,7 +368,13 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
             if (isIOS && previewItems.length > 2) {
-                alert('iOS设备一次只能下载少量图片，请单独点击每个切片下方的下载按钮');
+                alert('iOS设备一次下载多张图片可能较慢，将会依次显示每张图片，请分别长按并保存');
+                previewItems.forEach((item, index) => {
+                    setTimeout(() => {
+                        const dataURL = item.querySelector('.preview-image').src;
+                        downloadImage(dataURL, `slice_${index + 1}.jpg`);
+                    }, index * 2500); // 延长间隔，确保用户有足够时间保存
+                });
                 return;
             }
             
@@ -367,7 +401,7 @@
                 notice.style.fontSize = '14px';
                 
                 if (isIOS) {
-                    notice.textContent = '提示：iOS设备请在弹出的新页面中长按图片并选择"保存图像"';
+                    notice.textContent = '提示：iOS设备请在图片显示后长按并选择"保存图像"';
                 } else {
                     notice.textContent = '提示：下载的图片会保存到您设备的"下载"文件夹';
                 }
