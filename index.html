@@ -250,6 +250,9 @@
             // 计算每个切片的高度
             const sliceHeight = height / nSlices;
             
+            // 检测是否为iOS设备
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
             // 创建切片
             for (let i = 0; i < nSlices; i++) {
                 const top = Math.floor(i * sliceHeight);
@@ -268,19 +271,37 @@
                 const previewItem = document.createElement('div');
                 previewItem.className = 'preview-item';
                 
-                const downloadButton = document.createElement('button');
-                downloadButton.textContent = `下载切片 ${i + 1}`;
-                downloadButton.addEventListener('click', function() {
-                    downloadImage(sliceCanvas.toDataURL('image/jpeg'), `slice_${i + 1}.jpg`);
-                });
+                // 将canvas转换为图片数据
+                const imgDataUrl = sliceCanvas.toDataURL('image/jpeg');
+                
+                // iOS设备不显示下载按钮
+                if (!isIOS) {
+                    const downloadButton = document.createElement('button');
+                    downloadButton.textContent = `下载切片 ${i + 1}`;
+                    downloadButton.dataset.imgSrc = imgDataUrl; // 存储图片数据
+                    downloadButton.dataset.fileName = `slice_${i + 1}.jpg`; // 存储文件名
+                    downloadButton.addEventListener('click', function() {
+                        const dataURL = this.dataset.imgSrc;
+                        const filename = this.dataset.fileName;
+                        downloadImage(dataURL, filename);
+                    });
+                    previewItem.appendChild(downloadButton);
+                }
                 
                 const previewImage = document.createElement('img');
-                previewImage.src = sliceCanvas.toDataURL('image/jpeg');
+                previewImage.src = imgDataUrl;
                 previewImage.className = 'preview-image';
+                previewImage.dataset.index = i;
                 
-                previewItem.appendChild(downloadButton);
                 previewItem.appendChild(previewImage);
                 previewContainer.appendChild(previewItem);
+            }
+            
+            // 隐藏或显示"下载全部"按钮
+            if (isIOS) {
+                downloadAllButton.classList.add('hidden');
+            } else {
+                downloadAllButton.classList.remove('hidden');
             }
             
             // 显示结果
@@ -293,9 +314,7 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
             if (isIOS) {
-                // iOS处理方式 - 使用模态窗口而非弹出窗口
-                
-                // 创建模态窗口
+                // iOS处理方式 - 使用模态窗口
                 const modal = document.createElement('div');
                 modal.style.position = 'fixed';
                 modal.style.top = '0';
@@ -327,7 +346,7 @@
                 
                 // 创建提示文本
                 const hint = document.createElement('div');
-                hint.textContent = '长按图片并选择"保存图像"或点击下方按钮分享';
+                hint.textContent = '长按图片并选择"添加到照片"保存到相册';
                 hint.style.color = 'white';
                 hint.style.padding = '15px';
                 hint.style.backgroundColor = '#333';
@@ -343,58 +362,33 @@
                 img.style.margin = '10px';
                 img.style.border = '1px solid #fff';
                 
-                // 创建分享按钮 (使用Web Share API)
-                if (navigator.share) {
-                    const shareBtn = document.createElement('button');
-                    shareBtn.textContent = '分享到相册';
-                    shareBtn.style.padding = '12px 20px';
-                    shareBtn.style.backgroundColor = '#4CAF50';
-                    shareBtn.style.color = 'white';
-                    shareBtn.style.border = 'none';
-                    shareBtn.style.borderRadius = '4px';
-                    shareBtn.style.margin = '15px';
-                    shareBtn.style.fontSize = '16px';
-                    
-                    shareBtn.onclick = async function() {
-                        try {
-                            // 将Base64数据URL转换为Blob对象
-                            const fetchResponse = await fetch(dataURL);
-                            const blob = await fetchResponse.blob();
-                            
-                            // 创建File对象
-                            const file = new File([blob], filename, { type: 'image/jpeg' });
-                            
-                            // 使用Web Share API分享
-                            await navigator.share({
-                                title: '图片切片',
-                                text: '分享图片到相册',
-                                files: [file]
-                            });
-                            
-                            alert('分享成功！您可以在分享菜单中选择"保存图像"来保存到相册。');
-                        } catch (error) {
-                            console.error('分享失败:', error);
-                            alert('分享失败，请长按图片直接保存。');
-                        }
-                    };
-                    
-                    // 添加分享按钮到模态窗口
-                    modal.appendChild(shareBtn);
-                }
-                
                 // 组装模态窗口
                 modal.appendChild(closeBtn);
                 modal.appendChild(hint);
                 modal.appendChild(img);
                 document.body.appendChild(modal);
             } else {
-                // 安卓和桌面设备的处理方式
-                const link = document.createElement('a');
-                link.href = dataURL;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                // 安卓和桌面设备的处理方式 - 使用Blob和createObjectURL以确保兼容性
+                fetch(dataURL)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = blobUrl;
+                        link.download = filename;
+                        // 添加到DOM以确保在所有浏览器中工作
+                        document.body.appendChild(link);
+                        link.click();
+                        // 清理
+                        setTimeout(() => {
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(blobUrl);
+                        }, 100);
+                    })
+                    .catch(err => {
+                        console.error('下载失败:', err);
+                        alert('下载失败，请重试');
+                    });
             }
         }
         
@@ -406,23 +400,23 @@
             // 检测是否为iOS设备
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
-            if (isIOS && previewItems.length > 2) {
-                alert('iOS设备一次下载多张图片可能较慢，将会依次显示每张图片，请分别长按并保存');
-                previewItems.forEach((item, index) => {
-                    setTimeout(() => {
-                        const dataURL = item.querySelector('.preview-image').src;
-                        downloadImage(dataURL, `slice_${index + 1}.jpg`);
-                    }, index * 2500); // 延长间隔，确保用户有足够时间保存
-                });
+            if (isIOS) {
+                alert('iOS设备请长按每张图片并保存');
                 return;
             }
             
+            alert('即将开始下载所有图片，共' + previewItems.length + '张');
+            
             // 使用延时依次下载所有图片，避免浏览器阻止多次下载
             previewItems.forEach((item, index) => {
-                setTimeout(() => {
-                    const dataURL = item.querySelector('.preview-image').src;
-                    downloadImage(dataURL, `slice_${index + 1}.jpg`);
-                }, index * (isIOS ? 2000 : 1000)); // iOS设备间隔更长
+                const imgElement = item.querySelector('.preview-image');
+                if (imgElement) {
+                    const dataURL = imgElement.src;
+                    // 延时下载，确保浏览器能够处理每一个下载请求
+                    setTimeout(() => {
+                        downloadImage(dataURL, `slice_${index + 1}.jpg`);
+                    }, index * 1000); // 每张图片间隔1秒
+                }
             });
         });
         
@@ -440,14 +434,9 @@
                 notice.style.fontSize = '14px';
                 
                 if (isIOS) {
-                    // 检查是否支持Web Share API
-                    if (navigator.share && navigator.canShare) {
-                        notice.textContent = '提示：iOS设备可点击"分享到相册"按钮，从分享菜单中选择"保存图像"直接保存到相册';
-                    } else {
-                        notice.textContent = '提示：iOS设备请在图片显示后长按并选择"添加到照片"保存到相册';
-                    }
+                    notice.textContent = '提示：iOS设备请长按图片并选择"添加到照片"保存到相册';
                 } else {
-                    notice.textContent = '提示：下载的图片会保存到您设备的"下载"文件夹';
+                    notice.textContent = '提示：点击下载按钮保存图片到您的设备';
                 }
                 
                 const container = document.querySelector('.container');
