@@ -56,37 +56,8 @@
         button:hover {
             background-color: #45a049;
         }
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .preview-item {
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: white;
-            text-align: center;
-            flex-basis: calc(50% - 10px);
-            box-sizing: border-box;
-        }
-        .preview-image {
-            max-width: 100%;
-            height: auto;
-            margin-bottom: 10px;
-        }
-        .download-all {
-            margin-top: 20px;
-        }
         .hidden {
             display: none;
-        }
-        .image-preview {
-            max-width: 100%;
-            height: auto;
-            margin: 10px auto;
-            display: block;
         }
         /* 新增的样式 */
         .input-row {
@@ -101,25 +72,25 @@
         .slice-input {
             flex: 1;
         }
-        .preview-section {
-            flex: 1;
+        
+        /* 新增的提示消息样式 */
+        .message {
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            transition: opacity 0.3s ease;
         }
-        .results-section {
-            flex: 1;
+        .success-message {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
         }
-        .results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .results-header button {
-            margin: 0;
-        }
-        .main-content {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
+        .info-message {
+            background-color: #d9edf7;
+            color: #31708f;
+            border: 1px solid #bce8f1;
         }
         
         /* 移动设备响应式布局 */
@@ -138,13 +109,6 @@
                 flex: none;
                 width: 100%;
             }
-            .main-content {
-                flex-direction: column;
-            }
-            .preview-section, .results-section {
-                flex: none;
-                width: 100%;
-            }
             button {
                 width: 100%;
                 padding: 15px;
@@ -153,15 +117,15 @@
             h1 {
                 font-size: 20px;
             }
-            .preview-item {
-                flex-basis: 100%;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>竖长图片切片工具</h1>
+        
+        <!-- 添加消息提示区域 -->
+        <div id="message-container" class="hidden message"></div>
         
         <div class="input-row">
             <div class="input-group file-input">
@@ -178,17 +142,11 @@
         <button id="slice-button">切割图片</button>
         
         <div class="main-content">
-            <div id="preview-original" class="preview-section hidden">
-                <p>原图预览:</p>
-                <img id="original-image" class="image-preview">
-            </div>
-            
-            <div id="results" class="results-section hidden">
+            <div id="results" class="hidden">
                 <div class="results-header">
                     <h2>切片结果</h2>
                     <button id="download-all" class="download-all">下载全部切片</button>
                 </div>
-                <div id="preview-container" class="preview-container"></div>
             </div>
         </div>
     </div>
@@ -196,16 +154,27 @@
     <script>
         // DOM 元素引用
         const imageUpload = document.getElementById('image-upload');
-        const originalImage = document.getElementById('original-image');
-        const previewOriginal = document.getElementById('preview-original');
         const numSlices = document.getElementById('num-slices');
         const sliceButton = document.getElementById('slice-button');
         const results = document.getElementById('results');
-        const previewContainer = document.getElementById('preview-container');
         const downloadAllButton = document.getElementById('download-all');
+        const messageContainer = document.getElementById('message-container');
         
         // 存储上传的图片
         let uploadedImage = null;
+        let slicedImages = [];
+        
+        // 显示消息函数
+        function showMessage(message, type = 'info') {
+            messageContainer.textContent = message;
+            messageContainer.className = `message ${type === 'success' ? 'success-message' : 'info-message'}`;
+            messageContainer.classList.remove('hidden');
+            
+            // 5秒后自动隐藏消息
+            setTimeout(() => {
+                messageContainer.classList.add('hidden');
+            }, 5000);
+        }
         
         // 监听图片上传
         imageUpload.addEventListener('change', function(e) {
@@ -218,8 +187,7 @@
                     uploadedImage.src = event.target.result;
                     
                     uploadedImage.onload = function() {
-                        originalImage.src = uploadedImage.src;
-                        previewOriginal.classList.remove('hidden');
+                        showMessage(`图片"${file.name}"上传成功`, 'success');
                     };
                 };
                 
@@ -230,12 +198,12 @@
         // 切割图片
         sliceButton.addEventListener('click', function() {
             if (!uploadedImage) {
-                alert('请先上传图片！');
+                showMessage('请先上传图片！');
                 return;
             }
             
             // 清除之前的结果
-            previewContainer.innerHTML = '';
+            slicedImages = [];
             
             const width = uploadedImage.width;
             const height = uploadedImage.height;
@@ -243,7 +211,7 @@
             // 获取切片数量
             let nSlices = parseInt(numSlices.value);
             if (nSlices < 1) {
-                alert('切片数量必须大于0');
+                showMessage('切片数量必须大于0');
                 return;
             }
             
@@ -267,98 +235,127 @@
                 // 绘制切片
                 ctx.drawImage(uploadedImage, 0, top, width, bottom - top, 0, 0, width, bottom - top);
                 
-                // 创建预览元素
-                const previewItem = document.createElement('div');
-                previewItem.className = 'preview-item';
-                
                 // 将canvas转换为图片数据
                 const imgDataUrl = sliceCanvas.toDataURL('image/jpeg');
                 
-                const previewImage = document.createElement('img');
-                previewImage.src = imgDataUrl;
-                previewImage.className = 'preview-image';
-                previewImage.dataset.index = i;
-                previewImage.dataset.filename = `slice_${i + 1}.jpg`;
-                
-                previewItem.appendChild(previewImage);
-                previewContainer.appendChild(previewItem);
+                // 存储切片数据
+                slicedImages.push({
+                    dataUrl: imgDataUrl,
+                    filename: `slice_${i + 1}.jpg`
+                });
             }
             
             // 隐藏或显示"下载全部"按钮
             if (isIOS) {
                 downloadAllButton.classList.add('hidden');
+                showMessage(`已完成切片，总共 ${nSlices} 张。iOS设备请使用长按单个图片保存方式`, 'success');
             } else {
                 downloadAllButton.classList.remove('hidden');
+                showMessage(`已完成切片，总共 ${nSlices} 张，可以点击下载按钮获取所有切片`, 'success');
+                results.classList.remove('hidden');
             }
-            
-            // 显示结果
-            results.classList.remove('hidden');
         });
         
         // 下载全部切片
         downloadAllButton.addEventListener('click', function() {
-            const previewImages = previewContainer.querySelectorAll('.preview-image');
-            if (previewImages.length === 0) return;
+            if (slicedImages.length === 0) return;
             
             // 检测是否为iOS设备
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
             if (isIOS) {
-                alert('iOS设备请长按每张图片并保存');
+                showMessage('iOS设备请长按每张图片并保存');
                 return;
             }
             
-            alert(`即将开始下载 ${previewImages.length} 张图片，请稍等`);
+            showMessage(`开始下载 ${slicedImages.length} 张图片，请稍等...`);
             
-            // 创建下载队列，避免同时请求过多导致浏览器限制
-            let queue = [];
-            previewImages.forEach((img, index) => {
-                queue.push({
-                    dataURL: img.src,
-                    filename: img.dataset.filename || `slice_${index + 1}.jpg`,
-                    index: index
-                });
-            });
+            // 追踪下载完成的数量
+            let completedDownloads = 0;
+            const totalImages = slicedImages.length;
             
-            // 逐个下载图片，使用更大的时间间隔
-            function processQueue() {
-                if (queue.length === 0) {
+            // 逐个下载图片
+            function downloadNext(index) {
+                if (index >= totalImages) {
+                    showMessage(`已完成所有 ${totalImages} 张图片的下载`, 'success');
                     return;
                 }
                 
-                const item = queue.shift();
-                console.log(`正在下载第 ${item.index + 1} 张图片...`);
+                const imgData = slicedImages[index];
+                const dataURL = imgData.dataUrl;
+                const filename = imgData.filename;
                 
-                // 使用改进的下载方法
-                fetch(item.dataURL)
-                    .then(res => res.blob())
-                    .then(blob => {
-                        const blobUrl = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = blobUrl;
-                        link.download = item.filename;
-                        document.body.appendChild(link);
-                        link.click();
+                // 对于安卓设备，使用更可靠的下载方法
+                try {
+                    // 为最后一张使用直接打开方式以确保触发
+                    if (index === totalImages - 1) {
+                        // 创建一个隐藏的iframe来触发下载
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        document.body.appendChild(iframe);
                         
-                        // 清理DOM和内存
-                        setTimeout(() => {
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(blobUrl);
+                        const iframeDoc = iframe.contentWindow.document;
+                        
+                        // 在iframe中创建下载链接
+                        iframeDoc.open();
+                        iframeDoc.write('<html><body><a id="download-link" href="' + dataURL + '" download="' + filename + '">Download</a></body></html>');
+                        iframeDoc.close();
+                        
+                        // 点击链接触发下载
+                        setTimeout(function() {
+                            const downloadLink = iframeDoc.getElementById('download-link');
+                            downloadLink.click();
                             
-                            // 继续处理下一项，增加延迟以避免浏览器拦截
-                            setTimeout(processQueue, 1500);
+                            // 3秒后移除iframe
+                            setTimeout(function() {
+                                document.body.removeChild(iframe);
+                                completedDownloads++;
+                                showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
+                            }, 3000);
                         }, 500);
-                    })
-                    .catch(err => {
-                        console.error('下载失败:', err);
-                        alert(`第 ${item.index + 1} 张图片下载失败，继续下载其他图片`);
-                        // 即使失败也继续处理队列
-                        setTimeout(processQueue, 1500);
-                    });
+                    } else {
+                        // 常规下载方法
+                        fetch(dataURL)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                const blobUrl = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = blobUrl;
+                                link.download = filename;
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                
+                                // 清理资源
+                                setTimeout(() => {
+                                    document.body.removeChild(link);
+                                    URL.revokeObjectURL(blobUrl);
+                                    completedDownloads++;
+                                    showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
+                                    
+                                    // 下载下一张
+                                    setTimeout(() => downloadNext(index + 1), 1500);
+                                }, 500);
+                            })
+                            .catch(err => {
+                                console.error(`下载第 ${index + 1} 张图片失败:`, err);
+                                showMessage(`第 ${index + 1} 张图片下载失败，继续下载其他图片`);
+                                
+                                // 即使失败也继续下一张
+                                setTimeout(() => downloadNext(index + 1), 1500);
+                            });
+                    }
+                } catch (err) {
+                    console.error(`处理第 ${index + 1} 张图片时出错:`, err);
+                    showMessage(`第 ${index + 1} 张图片处理错误，继续下载`);
+                    
+                    // 出错也继续下一张
+                    setTimeout(() => downloadNext(index + 1), 1500);
+                }
             }
             
-            // 开始处理队列
-            processQueue();
+            // 开始下载第一张
+            downloadNext(0);
         });
         
         // 检测设备类型并显示提示
@@ -367,21 +364,11 @@
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
-                const notice = document.createElement('div');
-                notice.style.padding = '10px';
-                notice.style.backgroundColor = '#fffacd';
-                notice.style.borderRadius = '5px';
-                notice.style.marginBottom = '15px';
-                notice.style.fontSize = '14px';
-                
                 if (isIOS) {
-                    notice.textContent = '提示：iOS设备请长按图片并选择"添加到照片"保存到相册';
+                    showMessage('iOS设备请点击下载后长按图片并选择"添加到照片"保存到相册', 'info');
                 } else {
-                    notice.textContent = '提示：点击下载按钮保存图片到您的设备';
+                    showMessage('移动设备：点击下载按钮保存图片到您的设备', 'info');
                 }
-                
-                const container = document.querySelector('.container');
-                container.insertBefore(notice, container.firstChild);
             }
         });
     </script>
