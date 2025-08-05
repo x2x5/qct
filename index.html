@@ -257,7 +257,8 @@
             // 计算每个切片的高度
             const sliceHeight = height / nSlices;
             
-            // 检测是否为iOS设备
+            // 检测是否为移动设备
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             
             // 创建切片
@@ -302,10 +303,27 @@
                 previewContainer.appendChild(previewItem);
             }
             
-            // 隐藏或显示"下载全部"按钮
-            if (isIOS) {
+            // 处理移动设备上的下载按钮显示
+            if (isMobile) {
                 downloadAllButton.classList.add('hidden');
-                showMessage(`已完成切片，总共 ${nSlices} 张。iOS设备请长按图片保存`, 'success');
+                
+                // 为移动设备添加提示信息
+                const tipElement = document.createElement('div');
+                tipElement.className = 'message info-message';
+                tipElement.style.marginTop = '15px';
+                tipElement.style.marginBottom = '15px';
+                
+                if (isIOS) {
+                    tipElement.textContent = '请长按图片并选择"添加到照片"保存到相册';
+                } else {
+                    tipElement.textContent = '请长按图片并选择"保存图片"下载到设备';
+                }
+                
+                // 将提示添加到结果区域的顶部
+                const resultsHeader = document.querySelector('.results-header');
+                resultsHeader.appendChild(tipElement);
+                
+                showMessage(`已完成切片，总共 ${nSlices} 张。请长按图片保存`, 'success');
             } else {
                 downloadAllButton.classList.remove('hidden');
                 showMessage(`已完成切片，总共 ${nSlices} 张，可以点击下载按钮获取所有切片`, 'success');
@@ -328,7 +346,8 @@
                 return;
             }
             
-            showMessage(`开始下载 ${previewImages.length} 张图片，请稍等...`);
+            // 提前警告用户将有多个下载
+            showMessage(`开始下载 ${previewImages.length} 张图片，请允许多个下载`, 'info');
             
             // 转换为数组以便更好地处理
             const imagesArray = Array.from(previewImages);
@@ -348,43 +367,90 @@
                 const dataURL = img.src;
                 const filename = img.dataset.filename || `slice_${index + 1}.jpg`;
                 
-                // 使用统一的下载方式，不再对最后一张特殊处理
-                try {
-                    fetch(dataURL)
-                        .then(res => res.blob())
-                        .then(blob => {
-                            const blobUrl = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = blobUrl;
-                            link.download = filename;
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                            
-                            // 清理资源
-                            setTimeout(() => {
-                                document.body.removeChild(link);
-                                URL.revokeObjectURL(blobUrl);
-                                completedDownloads++;
-                                showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
-                                
-                                // 下载下一张
-                                setTimeout(() => downloadNext(index + 1), 1000);
-                            }, 500);
-                        })
-                        .catch(err => {
-                            console.error(`下载第 ${index + 1} 张图片失败:`, err);
-                            showMessage(`第 ${index + 1} 张图片下载失败，继续下载其他图片`);
-                            
-                            // 即使失败也继续下一张
-                            setTimeout(() => downloadNext(index + 1), 1000);
-                        });
-                } catch (err) {
-                    console.error(`处理第 ${index + 1} 张图片时出错:`, err);
-                    showMessage(`第 ${index + 1} 张图片处理错误，继续下载`);
+                // 对于最后一张图片，显示特别提示
+                if (index === totalImages - 1) {
+                    showMessage(`即将下载最后一张图片 (切片 ${index + 1})，请注意允许下载`, 'info');
                     
-                    // 出错也继续下一张
-                    setTimeout(() => downloadNext(index + 1), 1000);
+                    // 为最后一张图片设置更长的延迟
+                    setTimeout(() => {
+                        // 使用更可靠的方式触发最后一张图片的下载
+                        try {
+                            // 创建一个可见的临时下载按钮
+                            const tempBtn = document.createElement('button');
+                            tempBtn.textContent = `下载切片 ${index + 1}`;
+                            tempBtn.style.position = 'fixed';
+                            tempBtn.style.top = '10px';
+                            tempBtn.style.right = '10px';
+                            tempBtn.style.zIndex = '9999';
+                            tempBtn.style.backgroundColor = '#ff5722';
+                            tempBtn.style.color = 'white';
+                            tempBtn.style.padding = '10px';
+                            tempBtn.style.borderRadius = '4px';
+                            tempBtn.onclick = function() {
+                                const link = document.createElement('a');
+                                link.href = dataURL;
+                                link.download = filename;
+                                link.click();
+                                document.body.removeChild(tempBtn);
+                                completedDownloads++;
+                                showMessage(`下载完成: ${completedDownloads}/${totalImages}`, 'success');
+                            };
+                            document.body.appendChild(tempBtn);
+                            
+                            // 5秒后自动移除按钮
+                            setTimeout(() => {
+                                if (document.body.contains(tempBtn)) {
+                                    document.body.removeChild(tempBtn);
+                                }
+                            }, 5000);
+                            
+                            // 自动点击
+                            setTimeout(() => {
+                                tempBtn.click();
+                            }, 500);
+                        } catch (err) {
+                            console.error("无法下载最后一张图片:", err);
+                            showMessage("无法自动下载最后一张图片，请尝试单独下载", "info");
+                        }
+                    }, 2000);
+                } else {
+                    // 其他图片使用常规下载方式
+                    try {
+                        fetch(dataURL)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                const blobUrl = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = blobUrl;
+                                link.download = filename;
+                                document.body.appendChild(link);
+                                link.click();
+                                
+                                // 清理资源
+                                setTimeout(() => {
+                                    document.body.removeChild(link);
+                                    URL.revokeObjectURL(blobUrl);
+                                    completedDownloads++;
+                                    showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
+                                    
+                                    // 设置较长的间隔时间，防止浏览器拦截
+                                    setTimeout(() => downloadNext(index + 1), 1500);
+                                }, 500);
+                            })
+                            .catch(err => {
+                                console.error(`下载第 ${index + 1} 张图片失败:`, err);
+                                showMessage(`第 ${index + 1} 张图片下载失败，继续下载其他图片`);
+                                
+                                // 即使失败也继续下一张
+                                setTimeout(() => downloadNext(index + 1), 1500);
+                            });
+                    } catch (err) {
+                        console.error(`处理第 ${index + 1} 张图片时出错:`, err);
+                        showMessage(`第 ${index + 1} 张图片处理错误，继续下载`);
+                        
+                        // 出错也继续下一张
+                        setTimeout(() => downloadNext(index + 1), 1500);
+                    }
                 }
             }
             
@@ -394,14 +460,18 @@
         
         // 检测设备类型并显示提示
         document.addEventListener('DOMContentLoaded', function() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            // 检测是否为移动设备
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
+                // 在移动设备上，直接隐藏下载全部按钮
+                downloadAllButton.classList.add('hidden');
+                
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
                 if (isIOS) {
                     showMessage('iOS设备请长按图片并选择"添加到照片"保存到相册', 'info');
                 } else {
-                    showMessage('移动设备：点击下载按钮保存图片到您的设备', 'info');
+                    showMessage('请长按图片并选择"保存图片"下载到设备', 'info');
                 }
             }
         });
