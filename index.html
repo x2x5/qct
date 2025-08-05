@@ -56,6 +56,29 @@
         button:hover {
             background-color: #45a049;
         }
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .preview-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: white;
+            text-align: center;
+            flex-basis: calc(50% - 10px);
+            box-sizing: border-box;
+        }
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        .download-all {
+            margin-top: 20px;
+        }
         .hidden {
             display: none;
         }
@@ -71,6 +94,18 @@
         }
         .slice-input {
             flex: 1;
+        }
+        .results-section {
+            width: 100%;
+        }
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .results-header button {
+            margin: 0;
         }
         
         /* 新增的提示消息样式 */
@@ -117,6 +152,9 @@
             h1 {
                 font-size: 20px;
             }
+            .preview-item {
+                flex-basis: 100%;
+            }
         }
     </style>
 </head>
@@ -142,11 +180,12 @@
         <button id="slice-button">切割图片</button>
         
         <div class="main-content">
-            <div id="results" class="hidden">
+            <div id="results" class="results-section hidden">
                 <div class="results-header">
                     <h2>切片结果</h2>
                     <button id="download-all" class="download-all">下载全部切片</button>
                 </div>
+                <div id="preview-container" class="preview-container"></div>
             </div>
         </div>
     </div>
@@ -157,12 +196,12 @@
         const numSlices = document.getElementById('num-slices');
         const sliceButton = document.getElementById('slice-button');
         const results = document.getElementById('results');
+        const previewContainer = document.getElementById('preview-container');
         const downloadAllButton = document.getElementById('download-all');
         const messageContainer = document.getElementById('message-container');
         
         // 存储上传的图片
         let uploadedImage = null;
-        let slicedImages = [];
         
         // 显示消息函数
         function showMessage(message, type = 'info') {
@@ -203,7 +242,7 @@
             }
             
             // 清除之前的结果
-            slicedImages = [];
+            previewContainer.innerHTML = '';
             
             const width = uploadedImage.width;
             const height = uploadedImage.height;
@@ -235,30 +274,51 @@
                 // 绘制切片
                 ctx.drawImage(uploadedImage, 0, top, width, bottom - top, 0, 0, width, bottom - top);
                 
+                // 创建预览元素
+                const previewItem = document.createElement('div');
+                previewItem.className = 'preview-item';
+                
+                // 添加切片序号标签
+                const sliceLabel = document.createElement('div');
+                sliceLabel.textContent = `切片 ${i + 1}`;
+                sliceLabel.style.fontWeight = 'bold';
+                sliceLabel.style.margin = '8px 0';
+                sliceLabel.style.padding = '5px';
+                sliceLabel.style.backgroundColor = '#f5f5f5';
+                sliceLabel.style.borderRadius = '4px';
+                sliceLabel.style.textAlign = 'center';
+                previewItem.appendChild(sliceLabel);
+                
                 // 将canvas转换为图片数据
                 const imgDataUrl = sliceCanvas.toDataURL('image/jpeg');
                 
-                // 存储切片数据
-                slicedImages.push({
-                    dataUrl: imgDataUrl,
-                    filename: `slice_${i + 1}.jpg`
-                });
+                const previewImage = document.createElement('img');
+                previewImage.src = imgDataUrl;
+                previewImage.className = 'preview-image';
+                previewImage.dataset.index = i;
+                previewImage.dataset.filename = `slice_${i + 1}.jpg`;
+                
+                previewItem.appendChild(previewImage);
+                previewContainer.appendChild(previewItem);
             }
             
             // 隐藏或显示"下载全部"按钮
             if (isIOS) {
                 downloadAllButton.classList.add('hidden');
-                showMessage(`已完成切片，总共 ${nSlices} 张。iOS设备请使用长按单个图片保存方式`, 'success');
+                showMessage(`已完成切片，总共 ${nSlices} 张。iOS设备请长按图片保存`, 'success');
             } else {
                 downloadAllButton.classList.remove('hidden');
                 showMessage(`已完成切片，总共 ${nSlices} 张，可以点击下载按钮获取所有切片`, 'success');
-                results.classList.remove('hidden');
             }
+            
+            // 显示结果
+            results.classList.remove('hidden');
         });
         
         // 下载全部切片
         downloadAllButton.addEventListener('click', function() {
-            if (slicedImages.length === 0) return;
+            const previewImages = previewContainer.querySelectorAll('.preview-image');
+            if (previewImages.length === 0) return;
             
             // 检测是否为iOS设备
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -268,11 +328,14 @@
                 return;
             }
             
-            showMessage(`开始下载 ${slicedImages.length} 张图片，请稍等...`);
+            showMessage(`开始下载 ${previewImages.length} 张图片，请稍等...`);
+            
+            // 转换为数组以便更好地处理
+            const imagesArray = Array.from(previewImages);
             
             // 追踪下载完成的数量
             let completedDownloads = 0;
-            const totalImages = slicedImages.length;
+            const totalImages = imagesArray.length;
             
             // 逐个下载图片
             function downloadNext(index) {
@@ -281,9 +344,9 @@
                     return;
                 }
                 
-                const imgData = slicedImages[index];
-                const dataURL = imgData.dataUrl;
-                const filename = imgData.filename;
+                const img = imagesArray[index];
+                const dataURL = img.src;
+                const filename = img.dataset.filename || `slice_${index + 1}.jpg`;
                 
                 // 对于安卓设备，使用更可靠的下载方法
                 try {
@@ -365,7 +428,7 @@
             
             if (isMobile) {
                 if (isIOS) {
-                    showMessage('iOS设备请点击下载后长按图片并选择"添加到照片"保存到相册', 'info');
+                    showMessage('iOS设备请长按图片并选择"添加到照片"保存到相册', 'info');
                 } else {
                     showMessage('移动设备：点击下载按钮保存图片到您的设备', 'info');
                 }
