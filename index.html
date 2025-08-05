@@ -327,7 +327,7 @@
                 
                 // 创建提示文本
                 const hint = document.createElement('div');
-                hint.textContent = '长按图片并选择"保存图像"';
+                hint.textContent = '长按图片并选择"保存图像"或点击下方按钮分享';
                 hint.style.color = 'white';
                 hint.style.padding = '15px';
                 hint.style.backgroundColor = '#333';
@@ -342,6 +342,45 @@
                 img.style.maxHeight = '70vh';
                 img.style.margin = '10px';
                 img.style.border = '1px solid #fff';
+                
+                // 创建分享按钮 (使用Web Share API)
+                if (navigator.share) {
+                    const shareBtn = document.createElement('button');
+                    shareBtn.textContent = '分享到相册';
+                    shareBtn.style.padding = '12px 20px';
+                    shareBtn.style.backgroundColor = '#4CAF50';
+                    shareBtn.style.color = 'white';
+                    shareBtn.style.border = 'none';
+                    shareBtn.style.borderRadius = '4px';
+                    shareBtn.style.margin = '15px';
+                    shareBtn.style.fontSize = '16px';
+                    
+                    shareBtn.onclick = async function() {
+                        try {
+                            // 将Base64数据URL转换为Blob对象
+                            const fetchResponse = await fetch(dataURL);
+                            const blob = await fetchResponse.blob();
+                            
+                            // 创建File对象
+                            const file = new File([blob], filename, { type: 'image/jpeg' });
+                            
+                            // 使用Web Share API分享
+                            await navigator.share({
+                                title: '图片切片',
+                                text: '分享图片到相册',
+                                files: [file]
+                            });
+                            
+                            alert('分享成功！您可以在分享菜单中选择"保存图像"来保存到相册。');
+                        } catch (error) {
+                            console.error('分享失败:', error);
+                            alert('分享失败，请长按图片直接保存。');
+                        }
+                    };
+                    
+                    // 添加分享按钮到模态窗口
+                    modal.appendChild(shareBtn);
+                }
                 
                 // 组装模态窗口
                 modal.appendChild(closeBtn);
@@ -401,7 +440,12 @@
                 notice.style.fontSize = '14px';
                 
                 if (isIOS) {
-                    notice.textContent = '提示：iOS设备请在图片显示后长按并选择"保存图像"';
+                    // 检查是否支持Web Share API
+                    if (navigator.share && navigator.canShare) {
+                        notice.textContent = '提示：iOS设备可点击"分享到相册"按钮，从分享菜单中选择"保存图像"直接保存到相册';
+                    } else {
+                        notice.textContent = '提示：iOS设备请在图片显示后长按并选择"添加到照片"保存到相册';
+                    }
                 } else {
                     notice.textContent = '提示：下载的图片会保存到您设备的"下载"文件夹';
                 }
