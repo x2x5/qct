@@ -348,72 +348,43 @@
                 const dataURL = img.src;
                 const filename = img.dataset.filename || `slice_${index + 1}.jpg`;
                 
-                // 对于安卓设备，使用更可靠的下载方法
+                // 使用统一的下载方式，不再对最后一张特殊处理
                 try {
-                    // 为最后一张使用直接打开方式以确保触发
-                    if (index === totalImages - 1) {
-                        // 创建一个隐藏的iframe来触发下载
-                        const iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        document.body.appendChild(iframe);
-                        
-                        const iframeDoc = iframe.contentWindow.document;
-                        
-                        // 在iframe中创建下载链接
-                        iframeDoc.open();
-                        iframeDoc.write('<html><body><a id="download-link" href="' + dataURL + '" download="' + filename + '">Download</a></body></html>');
-                        iframeDoc.close();
-                        
-                        // 点击链接触发下载
-                        setTimeout(function() {
-                            const downloadLink = iframeDoc.getElementById('download-link');
-                            downloadLink.click();
+                    fetch(dataURL)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const blobUrl = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = blobUrl;
+                            link.download = filename;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
                             
-                            // 3秒后移除iframe
-                            setTimeout(function() {
-                                document.body.removeChild(iframe);
+                            // 清理资源
+                            setTimeout(() => {
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(blobUrl);
                                 completedDownloads++;
                                 showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
-                            }, 3000);
-                        }, 500);
-                    } else {
-                        // 常规下载方法
-                        fetch(dataURL)
-                            .then(res => res.blob())
-                            .then(blob => {
-                                const blobUrl = URL.createObjectURL(blob);
-                                const link = document.createElement('a');
-                                link.href = blobUrl;
-                                link.download = filename;
-                                link.style.display = 'none';
-                                document.body.appendChild(link);
-                                link.click();
                                 
-                                // 清理资源
-                                setTimeout(() => {
-                                    document.body.removeChild(link);
-                                    URL.revokeObjectURL(blobUrl);
-                                    completedDownloads++;
-                                    showMessage(`下载进度: ${completedDownloads}/${totalImages}`);
-                                    
-                                    // 下载下一张
-                                    setTimeout(() => downloadNext(index + 1), 1500);
-                                }, 500);
-                            })
-                            .catch(err => {
-                                console.error(`下载第 ${index + 1} 张图片失败:`, err);
-                                showMessage(`第 ${index + 1} 张图片下载失败，继续下载其他图片`);
-                                
-                                // 即使失败也继续下一张
-                                setTimeout(() => downloadNext(index + 1), 1500);
-                            });
-                    }
+                                // 下载下一张
+                                setTimeout(() => downloadNext(index + 1), 1000);
+                            }, 500);
+                        })
+                        .catch(err => {
+                            console.error(`下载第 ${index + 1} 张图片失败:`, err);
+                            showMessage(`第 ${index + 1} 张图片下载失败，继续下载其他图片`);
+                            
+                            // 即使失败也继续下一张
+                            setTimeout(() => downloadNext(index + 1), 1000);
+                        });
                 } catch (err) {
                     console.error(`处理第 ${index + 1} 张图片时出错:`, err);
                     showMessage(`第 ${index + 1} 张图片处理错误，继续下载`);
                     
                     // 出错也继续下一张
-                    setTimeout(() => downloadNext(index + 1), 1500);
+                    setTimeout(() => downloadNext(index + 1), 1000);
                 }
             }
             
