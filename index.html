@@ -274,24 +274,11 @@
                 // 将canvas转换为图片数据
                 const imgDataUrl = sliceCanvas.toDataURL('image/jpeg');
                 
-                // iOS设备不显示下载按钮
-                if (!isIOS) {
-                    const downloadButton = document.createElement('button');
-                    downloadButton.textContent = `下载切片 ${i + 1}`;
-                    downloadButton.dataset.imgSrc = imgDataUrl; // 存储图片数据
-                    downloadButton.dataset.fileName = `slice_${i + 1}.jpg`; // 存储文件名
-                    downloadButton.addEventListener('click', function() {
-                        const dataURL = this.dataset.imgSrc;
-                        const filename = this.dataset.fileName;
-                        downloadImage(dataURL, filename);
-                    });
-                    previewItem.appendChild(downloadButton);
-                }
-                
                 const previewImage = document.createElement('img');
                 previewImage.src = imgDataUrl;
                 previewImage.className = 'preview-image';
                 previewImage.dataset.index = i;
+                previewImage.dataset.filename = `slice_${i + 1}.jpg`;
                 
                 previewItem.appendChild(previewImage);
                 previewContainer.appendChild(previewItem);
@@ -308,94 +295,10 @@
             results.classList.remove('hidden');
         });
         
-        // 下载单个图片
-        function downloadImage(dataURL, filename) {
-            // 检测是否为iOS设备
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            
-            if (isIOS) {
-                // iOS处理方式 - 使用模态窗口
-                const modal = document.createElement('div');
-                modal.style.position = 'fixed';
-                modal.style.top = '0';
-                modal.style.left = '0';
-                modal.style.width = '100%';
-                modal.style.height = '100%';
-                modal.style.backgroundColor = 'rgba(0,0,0,0.7)';
-                modal.style.zIndex = '1000';
-                modal.style.display = 'flex';
-                modal.style.flexDirection = 'column';
-                modal.style.alignItems = 'center';
-                modal.style.justifyContent = 'center';
-                
-                // 创建关闭按钮
-                const closeBtn = document.createElement('button');
-                closeBtn.textContent = '关闭';
-                closeBtn.style.position = 'absolute';
-                closeBtn.style.top = '20px';
-                closeBtn.style.right = '20px';
-                closeBtn.style.padding = '8px 16px';
-                closeBtn.style.backgroundColor = '#f44336';
-                closeBtn.style.color = 'white';
-                closeBtn.style.border = 'none';
-                closeBtn.style.borderRadius = '4px';
-                closeBtn.style.zIndex = '1001';
-                closeBtn.onclick = function() {
-                    document.body.removeChild(modal);
-                };
-                
-                // 创建提示文本
-                const hint = document.createElement('div');
-                hint.textContent = '长按图片并选择"添加到照片"保存到相册';
-                hint.style.color = 'white';
-                hint.style.padding = '15px';
-                hint.style.backgroundColor = '#333';
-                hint.style.borderRadius = '5px';
-                hint.style.marginBottom = '20px';
-                hint.style.fontSize = '16px';
-                
-                // 创建图片元素
-                const img = document.createElement('img');
-                img.src = dataURL;
-                img.style.maxWidth = '90%';
-                img.style.maxHeight = '70vh';
-                img.style.margin = '10px';
-                img.style.border = '1px solid #fff';
-                
-                // 组装模态窗口
-                modal.appendChild(closeBtn);
-                modal.appendChild(hint);
-                modal.appendChild(img);
-                document.body.appendChild(modal);
-            } else {
-                // 安卓和桌面设备的处理方式 - 使用Blob和createObjectURL以确保兼容性
-                fetch(dataURL)
-                    .then(res => res.blob())
-                    .then(blob => {
-                        const blobUrl = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = blobUrl;
-                        link.download = filename;
-                        // 添加到DOM以确保在所有浏览器中工作
-                        document.body.appendChild(link);
-                        link.click();
-                        // 清理
-                        setTimeout(() => {
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(blobUrl);
-                        }, 100);
-                    })
-                    .catch(err => {
-                        console.error('下载失败:', err);
-                        alert('下载失败，请重试');
-                    });
-            }
-        }
-        
         // 下载全部切片
         downloadAllButton.addEventListener('click', function() {
-            const previewItems = previewContainer.querySelectorAll('.preview-item');
-            if (previewItems.length === 0) return;
+            const previewImages = previewContainer.querySelectorAll('.preview-image');
+            if (previewImages.length === 0) return;
             
             // 检测是否为iOS设备
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -405,19 +308,57 @@
                 return;
             }
             
-            alert('即将开始下载所有图片，共' + previewItems.length + '张');
+            alert(`即将开始下载 ${previewImages.length} 张图片，请稍等`);
             
-            // 使用延时依次下载所有图片，避免浏览器阻止多次下载
-            previewItems.forEach((item, index) => {
-                const imgElement = item.querySelector('.preview-image');
-                if (imgElement) {
-                    const dataURL = imgElement.src;
-                    // 延时下载，确保浏览器能够处理每一个下载请求
-                    setTimeout(() => {
-                        downloadImage(dataURL, `slice_${index + 1}.jpg`);
-                    }, index * 1000); // 每张图片间隔1秒
-                }
+            // 创建下载队列，避免同时请求过多导致浏览器限制
+            let queue = [];
+            previewImages.forEach((img, index) => {
+                queue.push({
+                    dataURL: img.src,
+                    filename: img.dataset.filename || `slice_${index + 1}.jpg`,
+                    index: index
+                });
             });
+            
+            // 逐个下载图片，使用更大的时间间隔
+            function processQueue() {
+                if (queue.length === 0) {
+                    return;
+                }
+                
+                const item = queue.shift();
+                console.log(`正在下载第 ${item.index + 1} 张图片...`);
+                
+                // 使用改进的下载方法
+                fetch(item.dataURL)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = blobUrl;
+                        link.download = item.filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        
+                        // 清理DOM和内存
+                        setTimeout(() => {
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(blobUrl);
+                            
+                            // 继续处理下一项，增加延迟以避免浏览器拦截
+                            setTimeout(processQueue, 1500);
+                        }, 500);
+                    })
+                    .catch(err => {
+                        console.error('下载失败:', err);
+                        alert(`第 ${item.index + 1} 张图片下载失败，继续下载其他图片`);
+                        // 即使失败也继续处理队列
+                        setTimeout(processQueue, 1500);
+                    });
+            }
+            
+            // 开始处理队列
+            processQueue();
         });
         
         // 检测设备类型并显示提示
